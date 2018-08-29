@@ -9,12 +9,14 @@
            [disabled]="disabled"
            [value]="selectedItem ? selectedItem.label : search"
            (input)="onSearchChange($event.target.value)"
-           (keydown.arrowup)="onArrowUp()"
-           (keydown.arrowdown)="onArrowDown()"
-           (keydown.enter)="selectActiveItem()">
-    <ul class="typeahead typeahead-long dropdown-menu" *ngIf="isOpen && filteredItems.length > 0" style="display: block;">
+           (keydown.arrowup)="onArrowUp($event)"
+           (keydown.arrowdown)="onArrowDown($event)"
+           (keyup.enter)="onEnterDown($event)"
+           (keyup.escape)="closePanel($event)">
+    <ul class="typeahead typeahead-long dropdown-menu"
+        [style.display]="isOpen && filteredItems.length > 0 ? 'block' : 'none'"
+        #panel>
       <li *ngFor="let item of filteredItems; let i = index"
-          [value]="item.value"
           [class.active]="activeElementIndex === i"
           (mouseover)="setActiveIndex(i)">
         <a (click)="selectItem(item)">
@@ -26,7 +28,7 @@
       </li>
     </ul>
     <span class="input-group-addon dropdown-toggle"
-          (click)="selectedItem ? cancelSelection() : toggleOpen()">
+          (click)="selectedItem ? cancelSelection($event) : togglePanel($event)">
       <span class="caret"></span>
       <span class="glyphicon glyphicon-remove"></span>
     </span>

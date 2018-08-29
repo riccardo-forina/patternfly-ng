@@ -1,8 +1,14 @@
 import {
+  AfterContentChecked,
   Component,
+  ElementRef,
+  HostListener,
   Input,
+  NgZone,
+  ViewChild,
   ViewEncapsulation
 } from '@angular/core';
+import { NgOnChangesFeature } from '@angular/core/src/render3';
 
 export interface ComboboxItem {
   value: string;
@@ -29,16 +35,10 @@ export interface ComboboxItem {
 @Component({
   encapsulation: ViewEncapsulation.None,
   selector: 'pfng-combobox',
-  styles: [`
-    .combobox-disabled .dropdown-toggle {
-      cursor: not-allowed;
-      background-image: none;
-      box-shadow: none !important;
-    }
-  `],
-  templateUrl: './combobox.component.html'
+  styles: ['./combobox.component.less'],
+  templateUrl: './combobox.component.html',
 })
-export class ComboboxComponent {
+export class ComboboxComponent implements AfterContentChecked {
   /**
    * The placeholder to show in the input area
    */
@@ -68,6 +68,8 @@ export class ComboboxComponent {
    */
   @Input() disabled: Boolean;
 
+  @ViewChild('panel', { read: ElementRef }) panelElementRef: ElementRef;
+
   protected selectedItem: ComboboxItem;
   protected isOpen = false;
   protected rawItems: any[];
@@ -80,7 +82,18 @@ export class ComboboxComponent {
   /**
    * The default constructor
    */
-  constructor() {
+  constructor(
+    private _ngZone: NgZone
+  ) {}
+
+  ngAfterContentChecked() {
+    if (this.isOpen) {
+      this._ngZone.runOutsideAngular(() => {
+        window.requestAnimationFrame(() => {
+          this.scrollToActiveElement();
+        });
+      });
+    }
   }
 
   reset() {
@@ -88,11 +101,29 @@ export class ComboboxComponent {
     this.search = '';
     this.lowercaseSearch = '';
     this.filteredItems = this.allItems;
-    this.activeElementIndex = 0;
+
+    if (this.selectedItem) {
+      this.activeElementIndex = this.filteredItems.indexOf(this.selectedItem);
+    }
   }
 
-  toggleOpen() {
+  togglePanel(ev: MouseEvent) {
+    ev.stopPropagation();
     this.isOpen = this.disabled ? false : !this.isOpen;
+    if (this.isOpen) {
+      this.scrollToActiveElement();
+    }
+  }
+
+  closePanel() {
+    this.isOpen = false;
+    if (!this.selectedItem) {
+      this.activeElementIndex = 0;
+    }
+  }
+
+  openPanel() {
+    this.isOpen = true;
   }
 
   selectItem(item: ComboboxItem) {
@@ -101,38 +132,92 @@ export class ComboboxComponent {
   }
 
   selectActiveItem() {
-    this.selectedItem = this.filteredItems[this.activeElementIndex];
-    this.reset();
+    if (this.filteredItems.length > 0) {
+      this.selectedItem = this.filteredItems[this.activeElementIndex];
+      this.reset();
+    }
   }
 
   setActiveIndex(index: number) {
     this.activeElementIndex = index;
   }
 
-  onArrowUp() {
-    this.activeElementIndex = this.activeElementIndex > 0
-      ? this.activeElementIndex - 1
-      : this.activeElementIndex;
+  onArrowUp(ev: KeyboardEvent) {
+    ev.preventDefault();
+    if (this.isOpen) {
+      this.activeElementIndex = this.activeElementIndex > 0
+        ? this.activeElementIndex - 1
+        : this.activeElementIndex;
+    } else {
+      this.openPanel();
+    }
   }
 
-  onArrowDown() {
-    this.activeElementIndex = this.activeElementIndex < (this.filteredItems.length - 1)
-      ? this.activeElementIndex + 1
-      : this.activeElementIndex;
+  onArrowDown(ev: KeyboardEvent) {
+    ev.preventDefault();
+    if (this.isOpen) {
+      this.activeElementIndex = this.activeElementIndex < (this.filteredItems.length - 1)
+        ? this.activeElementIndex + 1
+        : this.activeElementIndex;
+    } else {
+      this.openPanel();
+    }
+  }
+
+  onEnterDown(ev: KeyboardEvent) {
+    if (this.isOpen) {
+      this.selectActiveItem();
+    } else {
+      this.openPanel();
+    }
   }
 
   onSearchChange(search: string) {
     this.selectedItem = null;
+    this.activeElementIndex = 0;
     this.search = search;
     this.lowercaseSearch = this.search.toLowerCase();
-    this.isOpen = true;
     this.filteredItems =
       this.allItems.filter((item: ComboboxItem) =>
         item.lowercaseLabel.includes(this.lowercaseSearch));
+    this.openPanel();
   }
 
-  cancelSelection() {
+  cancelSelection(ev: MouseEvent) {
+    ev.stopPropagation();
     this.selectedItem = null;
     this.reset();
+  }
+
+  scrollToActiveElement() {
+    if (!this.panelElementRef) {
+      return;
+    }
+
+    const panelEl = this.panelElementRef.nativeElement;
+    const activeEl = panelEl.querySelector(`li:nth-child(${this.activeElementIndex + 1})`);
+
+    if (!activeEl) {
+      return;
+    }
+
+    const viewportMinY = panelEl.scrollTop;
+    const viewportMaxY = viewportMinY + panelEl.clientHeight;
+
+    const d = activeEl.getBoundingClientRect();
+    if (activeEl.offsetTop < viewportMinY)  {
+      panelEl.scrollTop = activeEl.offsetTop;
+    } else if ((activeEl.offsetTop + d.height) > viewportMaxY) {
+      panelEl.scrollTop = activeEl.offsetTop + d.height - panelEl.clientHeight;
+    }
+  }
+
+  @HostListener('document:click', ['$event'])
+  onHostClick(ev: MouseEvent) {
+    if (!this.isOpen) {
+      return;
+    }
+    ev.stopPropagation();
+    this.closePanel();
   }
 }
