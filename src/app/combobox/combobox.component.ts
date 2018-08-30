@@ -69,6 +69,7 @@ export class ComboboxComponent implements AfterContentChecked {
   @Input() disabled: Boolean;
 
   @ViewChild('panel', { read: ElementRef }) panelElementRef: ElementRef;
+  @ViewChild('searchInput', { read: ElementRef }) searchElementRef: ElementRef;
 
   protected selectedItem: ComboboxItem;
   protected isOpen = false;
@@ -76,7 +77,6 @@ export class ComboboxComponent implements AfterContentChecked {
   protected allItems: ComboboxItem[];
   protected filteredItems: ComboboxItem[];
   protected search = '';
-  protected lowercaseSearch = '';
   protected activeElementIndex = 0;
 
   /**
@@ -87,6 +87,29 @@ export class ComboboxComponent implements AfterContentChecked {
   ) {}
 
   ngAfterContentChecked() {
+    // sets the value of the search input box, and hightlights the portion of it that's been autosuggested
+    if (this.selectedItem) {
+      this._ngZone.runOutsideAngular(() => {
+        // force this to be execute after this rendering cycle, to get the updated value in the input element
+        setTimeout(() => {
+          this.searchElementRef.nativeElement.setSelectionRange(this.search.length, this.selectedItem.label.length);
+        });
+      });
+    }
+
+    if (this.selectedItem) {
+      this.activeElementIndex = this.filteredItems.indexOf(this.selectedItem);
+    }
+
+    const lowercaseSearch = this.search.toLowerCase();
+    if (lowercaseSearch) {
+      this.filteredItems =
+        this.allItems.filter((item: ComboboxItem) =>
+          item.lowercaseLabel.startsWith(lowercaseSearch));
+    } else {
+      this.filteredItems = this.allItems;
+    }
+
     if (this.isOpen) {
       this._ngZone.runOutsideAngular(() => {
         window.requestAnimationFrame(() => {
@@ -94,17 +117,7 @@ export class ComboboxComponent implements AfterContentChecked {
         });
       });
     }
-  }
 
-  reset() {
-    this.isOpen = false;
-    this.search = '';
-    this.lowercaseSearch = '';
-    this.filteredItems = this.allItems;
-
-    if (this.selectedItem) {
-      this.activeElementIndex = this.filteredItems.indexOf(this.selectedItem);
-    }
   }
 
   togglePanel(ev: MouseEvent) {
@@ -128,65 +141,27 @@ export class ComboboxComponent implements AfterContentChecked {
 
   selectItem(item: ComboboxItem) {
     this.selectedItem = item;
-    this.reset();
+    this.search = this.selectedItem.label;
+    this.closePanel();
   }
 
-  selectActiveItem() {
-    if (this.filteredItems.length > 0) {
-      this.selectedItem = this.filteredItems[this.activeElementIndex];
-      this.reset();
-    }
+  setActiveItem() {
+    this.selectedItem = this.filteredItems[this.activeElementIndex];
+    this.search = this.selectedItem.label;
+    this.closePanel();
+  }
+
+  presetActiveItem() {
+    this.selectedItem = this.filteredItems[this.activeElementIndex];
   }
 
   setActiveIndex(index: number) {
     this.activeElementIndex = index;
   }
 
-  onArrowUp(ev: KeyboardEvent) {
-    ev.preventDefault();
-    if (this.isOpen) {
-      this.activeElementIndex = this.activeElementIndex > 0
-        ? this.activeElementIndex - 1
-        : this.activeElementIndex;
-    } else {
-      this.openPanel();
-    }
-  }
-
-  onArrowDown(ev: KeyboardEvent) {
-    ev.preventDefault();
-    if (this.isOpen) {
-      this.activeElementIndex = this.activeElementIndex < (this.filteredItems.length - 1)
-        ? this.activeElementIndex + 1
-        : this.activeElementIndex;
-    } else {
-      this.openPanel();
-    }
-  }
-
-  onEnterDown(ev: KeyboardEvent) {
-    if (this.isOpen) {
-      this.selectActiveItem();
-    } else {
-      this.openPanel();
-    }
-  }
-
-  onSearchChange(search: string) {
-    this.selectedItem = null;
-    this.activeElementIndex = 0;
-    this.search = search;
-    this.lowercaseSearch = this.search.toLowerCase();
-    this.filteredItems =
-      this.allItems.filter((item: ComboboxItem) =>
-        item.lowercaseLabel.includes(this.lowercaseSearch));
-    this.openPanel();
-  }
-
   cancelSelection(ev: MouseEvent) {
     ev.stopPropagation();
     this.selectedItem = null;
-    this.reset();
   }
 
   scrollToActiveElement() {
@@ -210,6 +185,85 @@ export class ComboboxComponent implements AfterContentChecked {
     } else if ((activeEl.offsetTop + d.height) > viewportMaxY) {
       panelEl.scrollTop = activeEl.offsetTop + d.height - panelEl.clientHeight;
     }
+  }
+
+
+  /**
+   * Responds to the up arrow key event.
+   *
+   * If the listbox is displayed, moves focus to the last suggested value.
+   * If the listbox is not displayed, opens the listbox and moves focus to the last value.
+   *
+   * @param ev
+   */
+  onArrowUp(ev: KeyboardEvent) {
+    ev.preventDefault();
+    if (this.isOpen) {
+      this.activeElementIndex = this.activeElementIndex > 0
+        ? this.activeElementIndex - 1
+        : this.filteredItems.length - 1;
+      this.presetActiveItem();
+    } else {
+      this.openPanel();
+    }
+  }
+
+  /**
+   * Responds to the down arrow key event.
+   *
+   * If the listbox is displayed moves focus to the second suggested value. Note that the first value is
+   * automatically selected.
+   * If the listbox is not displayed opens the listbox and moves focus to the first value.
+   *
+   * @param ev
+   */
+  onArrowDown(ev: KeyboardEvent) {
+    ev.preventDefault();
+    if (!this.isOpen) {
+      this.openPanel();
+    } else {
+      this.activeElementIndex = this.activeElementIndex < (this.filteredItems.length - 1)
+        ? this.activeElementIndex + 1
+        : 0;
+    }
+    this.presetActiveItem();
+  }
+
+  /**
+   * Responds to the enter key event.
+   *
+   * If the listbox is displayed and the first option is automatically selected:
+   * - Sets the textbox value to the content of the selected option.
+   * - Closes the listbox.
+   *
+   * @param ev
+   */
+  onEnterDown(ev: KeyboardEvent) {
+    if (!this.isOpen) {
+      return;
+    }
+    this.setActiveItem();
+  }
+
+  /**
+   * Responds to the escape key event;
+   *
+   * Clears the textbox
+   * If the listbox is displayed, closes it.
+   *
+   * @param ev
+   */
+  onEscapeDown(ev: KeyboardEvent) {
+    this.search = '';
+    this.selectedItem = null;
+    this.closePanel();
+  }
+
+  onSearchChange(search: string) {
+    this.selectedItem = null;
+    this.activeElementIndex = 0;
+    this.search = search;
+    this.openPanel();
   }
 
   @HostListener('document:click', ['$event'])

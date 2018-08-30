@@ -7,12 +7,13 @@
            [placeholder]="placeholder"
            class="combobox form-control"
            [disabled]="disabled"
-           [value]="selectedItem ? selectedItem.label : search"
+           [value]="this.selectedItem ? this.selectedItem.label : this.search"
            (input)="onSearchChange($event.target.value)"
            (keydown.arrowup)="onArrowUp($event)"
            (keydown.arrowdown)="onArrowDown($event)"
            (keyup.enter)="onEnterDown($event)"
-           (keyup.escape)="closePanel($event)">
+           (keyup.escape)="onEscapeDown($event)"
+           #searchInput>
     <ul class="typeahead typeahead-long dropdown-menu"
         [style.display]="isOpen && filteredItems.length > 0 ? 'block' : 'none'"
         #panel>
@@ -20,17 +21,16 @@
           [class.active]="activeElementIndex === i"
           (mouseover)="setActiveIndex(i)">
         <a (click)="selectItem(item)">
-          <ng-container *ngFor="let letter of item.label.split('')">
-            <strong *ngIf="lowercaseSearch.includes(letter.toLowerCase()) else notIncluded">{{letter}}</strong>
-            <ng-template #notIncluded>{{letter}}</ng-template>
-          </ng-container>
+          {{ item.label }}
         </a>
       </li>
     </ul>
-    <span class="input-group-addon dropdown-toggle"
-          (click)="selectedItem ? cancelSelection($event) : togglePanel($event)">
-      <span class="caret"></span>
-      <span class="glyphicon glyphicon-remove"></span>
-    </span>
+    <div class="input-group-btn">
+      <button class="btn btn-default dropdown-toggle"
+              (click)="selectedItem ? cancelSelection($event) : togglePanel($event)">
+        <span class="caret"></span>
+        <span class="glyphicon glyphicon-remove"></span>
+      </button>
+    </div>
   </div>
 </div>
